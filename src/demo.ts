@@ -1,17 +1,6 @@
-import { debug } from 'console';
 import { nswPoints, vicPoints } from './data/au.js';
 import { randomPoints } from './data/random.js';
-import {
-  Vector,
-  convertToVec,
-  crossProduct,
-  dotProduct,
-  lengthVector,
-  lineBetween,
-  multiplyVector,
-  unitVector,
-  vecToString,
-} from './helper.js';
+import { convertToVec, vecToString } from './helper.js';
 import * as glm from 'gl-matrix';
 
 const points = randomPoints(1000);
@@ -38,16 +27,12 @@ canvas.focus();
 function renderPoints(
   ctx: CanvasRenderingContext2D,
   points: Array<{ lat: number; lng: number }>,
-  camera: Vector,
+  camera: glm.vec3,
   style: { front: string; back?: string },
 ) {
-  const cameraVec3 = glm.vec3.fromValues(camera.x, camera.y, camera.z);
-
-  const cameraUp = glm.vec3.rotateZ(glm.vec3.create(), cameraVec3, cameraVec3, Math.PI / 4);
-
   const look = glm.mat4.lookAt(
     glm.mat4.create(),
-    cameraVec3,
+    camera,
     glm.vec3.fromValues(0, 0, 0),
     glm.vec3.fromValues(0, 0, 1),
   );
@@ -66,18 +51,19 @@ function renderPoints(
     const vec = convertToVec(p);
 
     // get line from camera to vec
-    const dir = unitVector(lineBetween(camera, vec));
+    const dir = glm.vec3.subtract(glm.vec3.create(), camera, vec);
+    glm.vec3.normalize(dir, dir);
 
     // If the vector points away from the camera, don't render it.
-    const dp = dotProduct(dir, vec);
-    const vecOnRear = dp > 0;
-    ctx.fillStyle = vecOnRear ? style.back ?? 'pink' : style.front;
+    const dp = glm.vec3.dot(dir, vec);
+    const vecOnRear = dp < 0;
+    if (vecOnRear) {
+      ctx.fillStyle = '#eee';
+    } else {
+      ctx.fillStyle = vecOnRear ? style.back ?? 'white' : style.front;
+    }
 
-    const cp = glm.vec3.transformMat4(
-      glm.vec3.create(),
-      glm.vec3.fromValues(vec.x, vec.y, vec.z),
-      mvp,
-    );
+    const cp = glm.vec3.transformMat4(glm.vec3.create(), vec, mvp);
 
     const renderFactor = worldSize;
     radius *= (cp[2] * worldSize) / 400;
@@ -123,7 +109,7 @@ function draw(time = 0) {
     shift.lat = -Math.PI / 2;
   }
 
-  const camera = multiplyVector(convertToVec(shift), -zoomLevel);
+  const camera = glm.vec3.scale(glm.vec3.create(), convertToVec(shift), -zoomLevel);
 
   const ctx = canvas.getContext('2d')!;
   ctx.translate(width, height);

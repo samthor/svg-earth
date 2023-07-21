@@ -1,3 +1,5 @@
+import * as glm from 'gl-matrix';
+
 export type LatLng = {
   lat: number;
   lng: number;
@@ -12,7 +14,7 @@ export type Vector = {
 /**
  * Convert to normal vector
  */
-export const convertToVec = (arg: LatLng): Vector => {
+export const convertToVec = (arg: LatLng) => {
   const cosLat = Math.cos(arg.lat);
 
   // right-handed vector: x -> 0°E,0°N; y -> 90°E,0°N, z -> 90°N
@@ -20,7 +22,7 @@ export const convertToVec = (arg: LatLng): Vector => {
   const y = cosLat * Math.sin(arg.lng);
   const z = Math.sin(arg.lat);
 
-  return { x, y, z };
+  return glm.vec3.fromValues(x, y, z);
 };
 
 /**
@@ -100,7 +102,7 @@ export const multiplyVector = (v: Vector, by: number) => {
   };
 };
 
-export const vecToString = (v: Vector, prec = 2) =>
-  `${v.x.toFixed(prec)},${v.y.toFixed(prec)},${v.z.toFixed(prec)}`;
+export const vecToString = (v: glm.vec3, prec = 2) =>
+  `${v[0].toFixed(prec)},${v[1].toFixed(prec)},${v[2].toFixed(prec)}`;
 
 export const locToString = (v: LatLng, prec = 2) => `${v.lat.toFixed(prec)},${v.lng.toFixed(prec)}`;
