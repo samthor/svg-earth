@@ -3,12 +3,16 @@
     "@types/node": "^20.3.1",
     "esbuild": "^0.18.4",
     "tsx": "^3.9.0",
-    "typescript": "^5.0.4"
+    "typescript": "^5.0.4",
+    "vite": "^4.4.4"
   },
   "type": "module",
   "scripts": {
     "test": "tsx test/"
   },
   "author": "Sam Thorogood <sam.thorogood@gmail.com>",
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "dependencies": {
+    "gl-matrix": "^3.4.3"
+  }
 }
