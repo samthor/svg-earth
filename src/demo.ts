@@ -1,7 +1,9 @@
 import { nswPoints, vicPoints } from './data/au.js';
 import { randomPoints } from './data/random.js';
-import { convertToVec, vecToString } from './helper.js';
+import { LatLng, convertToVec, vecToString } from './helper.js';
 import * as glm from 'gl-matrix';
+import { parseShp } from './lib/shp.js';
+import simplifyJs from 'simplify-js';
 
 const points = randomPoints(1000);
 
@@ -37,17 +39,18 @@ function renderPoints(
     glm.vec3.fromValues(0, 0, 1),
   );
 
+  // TODO: same for all shapes
   const perspective = glm.mat4.perspective(glm.mat4.create(), Math.PI / 3, 1, 0, 4);
   //  glm.mat4.ortho(perspective, -2, 2, -2, 2, 4, 8);
-
   const mvp = glm.mat4.multiply(glm.mat4.create(), perspective, look);
 
-  points.forEach((p) => {
-    let radius = scale * 2;
+  const renderFactor = worldSize;
 
-    // TODO: This part is entirely for our own culling/coloring.
+  // Find runs of visible points
+  const linesToRender: glm.vec3[][] = [];
+  let pendingPoints: glm.vec3[] = [];
 
-    // middle of planet is zero vec: find extrapolation as unit vector
+  points.forEach((p, i) => {
     const vec = convertToVec(p);
 
     // get line from camera to vec
@@ -58,27 +61,36 @@ function renderPoints(
     const dp = glm.vec3.dot(dir, vec);
     const vecOnRear = dp < 0;
     if (vecOnRear) {
-      ctx.fillStyle = '#eee';
-    } else {
-      ctx.fillStyle = vecOnRear ? style.back ?? 'white' : style.front;
-    }
-
-    const cp = glm.vec3.transformMat4(glm.vec3.create(), vec, mvp);
-
-    const renderFactor = worldSize;
-    radius *= (cp[2] * worldSize) / 400;
-    if (cp[2] <= 0.0 || radius < 0.0) {
+      if (pendingPoints.length > 1) {
+        linesToRender.push(pendingPoints);
+      }
+      pendingPoints = [];
       return;
     }
 
-    // TODO: shows middle line of planet
-    if (Math.abs(p.lat) < 0.1) {
-      ctx.fillStyle = 'black';
+    const cp = glm.vec3.transformMat4(glm.vec3.create(), vec, mvp);
+    pendingPoints.push(cp);
+  });
+
+  if (pendingPoints.length > 1) {
+    linesToRender.push(pendingPoints);
+    pendingPoints = [];
+  }
+
+  linesToRender.forEach((line) => {
+    ctx.beginPath();
+
+    const firstPoint = line[0];
+    ctx.moveTo(firstPoint[0] * renderFactor, firstPoint[1] * renderFactor);
+
+    for (let i = 1; i < line.length; ++i) {
+      const point = line[i];
+      ctx.lineTo(point[0] * renderFactor, point[1] * renderFactor);
     }
 
-    ctx.beginPath();
-    ctx.arc(cp[0] * renderFactor, cp[1] * renderFactor, radius, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.strokeStyle = 'red';
+    ctx.lineWidth = 4;
+    ctx.stroke();
   });
 }
 
@@ -87,6 +99,10 @@ const shift = {
   lng: 0,
 };
 const shiftDelta = { lat: 0, lng: 0 };
+
+const shapesToDraw: LatLng[][] = [];
+
+//shapesToDraw.push(points);
 
 let last = 0;
 function draw(time = 0) {
@@ -115,9 +131,9 @@ function draw(time = 0) {
   ctx.translate(width, height);
   ctx.scale(1 / scale, 1 / scale);
 
-  renderPoints(ctx, points, camera, { front: 'red' });
-  renderPoints(ctx, nswPoints, camera, { front: 'blue', back: '#99f' });
-  renderPoints(ctx, vicPoints, camera, { front: 'purple', back: '#96f' });
+  shapesToDraw.forEach((shape) => {
+    renderPoints(ctx, shape, camera, { front: 'red' });
+  });
 
   const duration = performance.now() - start;
 
@@ -176,3 +192,44 @@ canvas.addEventListener('keydown', (e) => {
 });
 
 draw();
+
+const r = await fetch('./data.shp');
+const raw = await r.arrayBuffer();
+
+const shp = await parseShp(new Uint8Array(raw));
+console.info('got shp', shp);
+
+shp.shapes.forEach((shape, i) => {
+  const { parts, points } = shape.shape;
+
+  for (let p = 0; p < parts.length; ++p) {
+    const start = parts[p];
+    const end = parts[p + 1] ?? points.length;
+    const slice = points.subarray(start * 2, end * 2);
+
+    const xyPoints: { x: number; y: number }[] = [];
+
+    for (let i = 0; i < slice.length; i += 2) {
+      const lng = (slice[i + 0] / 180) * Math.PI;
+      const lat = (slice[i + 1] / 180) * Math.PI * -1;
+
+      xyPoints.push({ x: lng, y: lat });
+    }
+
+    const simpleXyPoints = simplifyJs(xyPoints, 0.001, false);
+    if (!simpleXyPoints.length) {
+      return;
+    }
+
+    shapesToDraw.push(
+      simpleXyPoints.map((p) => {
+        return {
+          lat: p.y,
+          lng: p.x,
+        };
+      }),
+    );
+  }
+
+  //  shapesToDraw.push
+});
