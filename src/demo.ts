@@ -193,7 +193,10 @@ canvas.addEventListener('keydown', (e) => {
 
 draw();
 
-const r = await fetch('./data.shp');
+// @ts-ignore
+import dataUrl from './data.shp?url';
+
+const r = await fetch(dataUrl);
 const raw = await r.arrayBuffer();
 
 const shp = await parseShp(new Uint8Array(raw));
