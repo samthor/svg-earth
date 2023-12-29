@@ -10,7 +10,8 @@
   "type": "module",
   "scripts": {
     "test2": "tsx test/",
-    "test": "vitest"
+    "test": "vitest",
+    "build": "vite build"
   },
   "author": "Sam Thorogood <sam.thorogood@gmail.com>",
   "license": "Apache-2.0",
